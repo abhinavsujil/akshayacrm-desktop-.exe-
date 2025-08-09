@@ -1,7 +1,7 @@
 import sys
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QLabel, QHBoxLayout,
-    QRadioButton, QButtonGroup, QFrame, QStackedLayout, QSizePolicy
+    QRadioButton, QButtonGroup, QFrame, QSizePolicy, QStackedWidget
 )
 from PyQt6.QtGui import QPixmap, QFont
 from PyQt6.QtCore import Qt, QSize
@@ -31,15 +31,22 @@ class LoginUI(QWidget):
         self.setMinimumSize(600, 480)
         self.setStyleSheet("background-color: #f0f4fb;")
 
-        self.stack = QStackedLayout()
-        self.setLayout(self.stack)
+        # Use a stacked widget (not a stacked layout) so child screens can call
+        # stacked_widget.addWidget(...) and stacked_widget.setCurrentWidget(...)
+        self.stack = QStackedWidget()
+
+        outer_layout = QVBoxLayout(self)
+        outer_layout.setContentsMargins(0, 0, 0, 0)
+        outer_layout.addWidget(self.stack)
 
         self.init_landing_ui()
 
         # Initialize login panels
         self.staff_panel = StaffPanel(self.back_to_landing)
-        self.admin_panel = AdminPanel(self.back_to_landing)
+        # pass the stacked widget to AdminPanel (it expects it)
+        self.admin_panel = AdminPanel(self.back_to_landing, self.stack)
 
+        # Add widgets to the stacked widget
         self.stack.addWidget(self.landing_widget)
         self.stack.addWidget(self.staff_panel)
         self.stack.addWidget(self.admin_panel)
@@ -112,13 +119,12 @@ class LoginUI(QWidget):
         image_label.setScaledContents(True)
         image_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
+        pixmap = QPixmap()
         try:
-            response = requests.get(url)
-            pixmap = QPixmap()
+            response = requests.get(url, timeout=6)
             pixmap.loadFromData(response.content)
             image_label.setPixmap(pixmap)
-        except:
-            pixmap = QPixmap()
+        except Exception:
             image_label.setText("Image Load Error")
 
         label_widget = QLabel(label)
@@ -152,16 +158,17 @@ class LoginUI(QWidget):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
+        # scale icons nicely
         new_size = QSize(self.width() // 4, self.width() // 4)
         for label, pixmap in [(self.staff_image_label, self.staff_pixmap), (self.admin_image_label, self.admin_pixmap)]:
-            if not pixmap.isNull():
+            if pixmap and not pixmap.isNull():
                 scaled = pixmap.scaled(
                     new_size,
-                    Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                    Qt.AspectRatioMode.KeepAspectRatio,
                     Qt.TransformationMode.SmoothTransformation
                 )
                 label.setPixmap(scaled)
-                label.setFixedSize(new_size)
+                label.setFixedSize(scaled.size())
 
 
 if __name__ == "__main__":
