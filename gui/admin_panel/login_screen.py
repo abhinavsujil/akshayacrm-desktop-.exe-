@@ -3,11 +3,12 @@ from PyQt6.QtGui import QFont
 from PyQt6.QtCore import Qt
 from gui.admin_panel.admin_dashboard import AdminDashboard  # import your dashboard
 
+
 class AdminPanel(QWidget):
     def __init__(self, back_callback, stacked_widget):
         super().__init__()
         self.back_callback = back_callback
-        self.stacked_widget = stacked_widget  # We’ll use QStackedWidget for screen switching
+        self.stacked_widget = stacked_widget  # QStackedWidget instance
         self.init_ui()
 
     def init_ui(self):
@@ -90,17 +91,24 @@ class AdminPanel(QWidget):
         user = self.admin_id_input.text().strip()
         pwd = self.admin_pass_input.text().strip()
 
+        # Replace this check with supabase lookup for production
         if user == "admin" and pwd == "admin123":
             # Show visible welcome message
             msg = QMessageBox(self)
             msg.setWindowTitle("Login Successful")
             msg.setText(f"<b>Welcome {user}!</b>")
             msg.setIcon(QMessageBox.Icon.Information)
-            msg.setStyleSheet("QLabel { color: black; } QPushButton { color: black; }")
             msg.exec()
 
-            # Move to dashboard
+            # Move to dashboard (add to stacked widget)
             dashboard = AdminDashboard(admin_name=user)
+            # Avoid adding duplicate dashboards
+            # check if widget already in stack
+            for i in range(self.stacked_widget.count()):
+                if self.stacked_widget.widget(i).__class__ is AdminDashboard:
+                    self.stacked_widget.setCurrentIndex(i)
+                    return
+
             self.stacked_widget.addWidget(dashboard)
             self.stacked_widget.setCurrentWidget(dashboard)
         else:
@@ -108,5 +116,4 @@ class AdminPanel(QWidget):
             msg.setWindowTitle("Login Failed")
             msg.setText("<b>Invalid credentials</b>")
             msg.setIcon(QMessageBox.Icon.Critical)
-            msg.setStyleSheet("QLabel { color: black; } QPushButton { color: black; }")
             msg.exec()

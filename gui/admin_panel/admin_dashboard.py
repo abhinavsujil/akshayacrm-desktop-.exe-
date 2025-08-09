@@ -2,22 +2,37 @@ from PyQt6.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QLabel, QPushButt
 from PyQt6.QtGui import QFont
 from PyQt6.QtCore import Qt
 
+
 class AdminDashboard(QWidget):
     def __init__(self, admin_name="Admin"):
         super().__init__()
         self.admin_name = admin_name
         self.setWindowTitle("Admin Dashboard")
         self.setMinimumSize(1200, 700)
-        self.setStyleSheet(open("gui/admin_panel/style.qss").read())
+
+        # try to load the qss, but don't crash if missing
+        try:
+            with open("gui/admin_panel/style.qss", "r", encoding="utf-8") as f:
+                self.setStyleSheet(f.read())
+        except Exception:
+            # fallback style (keeps it visually consistent)
+            self.setStyleSheet("""
+                QWidget { background-color: #f0f4fb; color: #1e293b; font-family: 'Segoe UI', sans-serif; }
+                QFrame#sidebarFrame { background-color: white; border-right: 1px solid #e2e8f0; min-width: 220px; }
+                QLabel { font-size: 14px; }
+                QPushButton#sidebarButton { background: transparent; text-align: left; padding: 10px; border: none; }
+                QFrame#statCard { background: white; border-radius: 8px; padding: 12px; border: 1px solid #e6eefc; }
+            """)
+
         self.init_ui()
 
     def init_ui(self):
         main_layout = QHBoxLayout(self)
-        
+
         # Sidebar
         sidebar = QVBoxLayout()
-        sidebar.setContentsMargins(0, 0, 0, 0)
-        sidebar.setSpacing(0)
+        sidebar.setContentsMargins(12, 12, 12, 12)
+        sidebar.setSpacing(6)
 
         title = QLabel("⚙️ Admin Panel")
         title.setFont(QFont("Inter", 20, QFont.Weight.Bold))
@@ -57,7 +72,7 @@ class AdminDashboard(QWidget):
         stats_layout.addWidget(self.create_stat_card("Total Staff", "25"))
         content_layout.addLayout(stats_layout)
 
-        # Table for logs
+        # Table for logs (placeholder)
         table = QTableWidget(5, 3)
         table.setHorizontalHeaderLabels(["Log ID", "Customer Phone", "Status"])
         for row in range(5):
@@ -74,10 +89,10 @@ class AdminDashboard(QWidget):
         card = QFrame()
         card.setObjectName("statCard")
         layout = QVBoxLayout(card)
-        
+
         title_label = QLabel(title)
         title_label.setFont(QFont("Inter", 12))
-        
+
         value_label = QLabel(value)
         value_label.setFont(QFont("Inter", 20, QFont.Weight.Bold))
         value_label.setStyleSheet("color: #2563eb;")
