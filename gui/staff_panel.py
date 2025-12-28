@@ -1,14 +1,22 @@
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton, QMessageBox
+# staff_panel.py
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton, QMessageBox, QStackedWidget
 from PyQt6.QtGui import QFont
 from PyQt6.QtCore import Qt
 from gui.staff_dashboard import StaffDashboard
 from language.translator import Translator
 from supabase_utils import supabase_get  # ✅ Supabase functions
 
+
 class StaffPanel(QWidget):
-    def __init__(self, back_callback):
+    def __init__(self, back_callback, stack: QStackedWidget | None = None):
+        """
+        back_callback: callable to ask main window to go back to landing page
+        stack: optional QStackedWidget instance (preferred). If provided, dashboards will be
+               added to it instead of shown as top-level windows.
+        """
         super().__init__()
         self.back_callback = back_callback
+        self.stack = stack
         self.init_ui()
 
     def init_ui(self):
@@ -111,9 +119,12 @@ class StaffPanel(QWidget):
             return
 
         filter_query = f"id=eq.{user}&password=eq.{pwd}"
-        response = supabase_get("staff", filter_query)
+        try:
+            response = supabase_get("staff", filter_query)
+        except Exception:
+            response = None
 
-        if response.status_code == 200:
+        if response and getattr(response, "status_code", None) == 200:
             data = response.json()
             if data:
                 staff = data[0]
@@ -127,10 +138,63 @@ class StaffPanel(QWidget):
                         break
                     parent = parent.parent()
 
-                # ✅ Pass both staff_id and staff_name
+                # open StaffDashboard — prefer embedding in provided QStackedWidget
                 self.dashboard = StaffDashboard(staff_id=user, staff_name=staff_name, lang=lang)
-                self.dashboard.show()
-                self.close()
+
+                stack = self.stack
+                if stack is not None:
+                    # Add dashboard to the stack and show it
+                    stack.addWidget(self.dashboard)
+                    stack.setCurrentWidget(self.dashboard)
+
+                    # When dashboard emits logout_requested, remove it and return to landing
+                    try:
+                        def on_logout_and_cleanup(d=self.dashboard, s=stack):
+                            # switch to landing via back_callback (main)
+                            try:
+                                self.back_callback()
+                            except Exception:
+                                try:
+                                    s.setCurrentIndex(0)
+                                except Exception:
+                                    pass
+                            # remove and delete dashboard widget from stack
+                            try:
+                                s.removeWidget(d)
+                                d.deleteLater()
+                            except Exception:
+                                try:
+                                    d.close()
+                                except Exception:
+                                    pass
+
+                        self.dashboard.logout_requested.connect(on_logout_and_cleanup)
+                    except Exception:
+                        pass
+                else:
+                    # fallback: show standalone window (rare). Still connect logout to close+call-back.
+                    try:
+                        def fallback_logout():
+                            try:
+                                self.back_callback()
+                            except Exception:
+                                pass
+                            try:
+                                self.dashboard.close()
+                            except Exception:
+                                pass
+                        self.dashboard.logout_requested.connect(fallback_logout)
+                    except Exception:
+                        pass
+                    self.dashboard.show()
+
+                # If login panel is a top-level window, close it (if not inside stack).
+                try:
+                    if self.isWindow():
+                        self.close()
+                except Exception:
+                    pass
+
             else:
                 QMessageBox.warning(self, self.tr("Login Failed"), self.tr("Invalid ID or password."))
         else:

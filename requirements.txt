@@ -1,0 +1,4 @@
+PyQt6
+requests
+python-dotenv
+pyinstaller==6.17.0

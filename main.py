@@ -1,14 +1,16 @@
+# main.py
 import sys
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QLabel, QHBoxLayout,
-    QRadioButton, QButtonGroup, QFrame, QSizePolicy, QStackedWidget
+    QRadioButton, QButtonGroup, QFrame, QSizePolicy, QStackedWidget,
 )
 from PyQt6.QtGui import QPixmap, QFont
 from PyQt6.QtCore import Qt, QSize
 import requests
 
+# Adjust this import if your admin login class is named differently
 from gui.staff_panel import StaffPanel
-from gui.admin_panel.login_screen import AdminPanel
+from gui.admin_panel.admin_login import AdminLogin
 
 
 class ClickableLabel(QLabel):
@@ -26,125 +28,193 @@ class ClickableLabel(QLabel):
 class LoginUI(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("E-WorkTrack")
-        self.resize(1000, 680)
-        self.setMinimumSize(600, 480)
+        self.setWindowTitle("AKSHAYA KODANNUR CRM")
+
+        # sensible default window
+        self.resize(1200, 760)
+        self.setMinimumSize(900, 620)
+
         self.setStyleSheet("background-color: #f0f4fb;")
 
-        # Use a stacked widget (not a stacked layout) so child screens can call
-        # stacked_widget.addWidget(...) and stacked_widget.setCurrentWidget(...)
+        # central stacked widget for navigation
         self.stack = QStackedWidget()
 
         outer_layout = QVBoxLayout(self)
         outer_layout.setContentsMargins(0, 0, 0, 0)
         outer_layout.addWidget(self.stack)
 
+        # keep references so resizeEvent can access card widgets/pixmaps
+        self.staff_card = None
+        self.admin_card = None
+        self.staff_image_label = None
+        self.admin_image_label = None
+        self.staff_pixmap = None
+        self.admin_pixmap = None
+
         self.init_landing_ui()
 
-        # Initialize login panels
-        self.staff_panel = StaffPanel(self.back_to_landing)
-        # pass the stacked widget to AdminPanel (it expects it)
-        self.admin_panel = AdminPanel(self.back_to_landing, self.stack)
+        # instantiate other panels (these constructors should match your project)
+        try:
+            self.staff_panel = StaffPanel(self.back_to_landing)
+        except TypeError:
+            try:
+                self.staff_panel = StaffPanel(self.back_to_landing, self.stack)
+            except Exception:
+                self.staff_panel = StaffPanel(self.back_to_landing)
 
-        # Add widgets to the stacked widget
+        try:
+            self.admin_panel = AdminLogin(self.back_to_landing)
+        except TypeError:
+            try:
+                self.admin_panel = AdminLogin(self.back_to_landing, self.stack)
+            except Exception:
+                self.admin_panel = AdminLogin(self.back_to_landing)
+
+        # add pages to stack
         self.stack.addWidget(self.landing_widget)
         self.stack.addWidget(self.staff_panel)
         self.stack.addWidget(self.admin_panel)
 
+        # show landing initially
+        self.stack.setCurrentWidget(self.landing_widget)
+
     def init_landing_ui(self):
+        # root landing widget
         self.landing_widget = QWidget()
-        layout = QVBoxLayout(self.landing_widget)
+        root_layout = QVBoxLayout(self.landing_widget)
+        root_layout.setContentsMargins(24, 18, 24, 18)
+        root_layout.setSpacing(12)
 
-        title = QLabel("Welcome to E-WorkTrack")
+        # header (constrained width so title never becomes ridiculously long)
+        title = QLabel("Welcome to AKSHAYA KODANNUR CRM")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title.setFont(QFont("Inter", 28, QFont.Weight.Bold))
-        title.setStyleSheet("color: #1e293b; padding-top: 30px; padding-bottom: 15px;")
-        layout.addWidget(title)
+        title.setFont(QFont("Inter", 34, QFont.Weight.DemiBold))
+        title.setStyleSheet("color: #0f172a; margin-top: 8px;")
+        title.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        root_layout.addWidget(title)
 
-        self.card_layout = QHBoxLayout()
-        self.card_layout.setSpacing(30)
+        subtitle = QLabel("Choose a role to continue")
+        subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        subtitle.setFont(QFont("Inter", 12))
+        subtitle.setStyleSheet("color: #475569; margin-bottom: 6px;")
+        root_layout.addWidget(subtitle)
 
-        self.staff_card, self.staff_image_label, self.staff_pixmap = self.create_card(
-            "Staff",
-            "https://cdn-icons-png.flaticon.com/512/3135/3135715.png"
-        )
-        self.admin_card, self.admin_image_label, self.admin_pixmap = self.create_card(
-            "Admin",
-            "https://cdn-icons-png.flaticon.com/512/4034/4034609.png"
-        )
+        # --- Center wrapper (constrain max width so UI looks like a login page) ---
+        self.center_wrapper = QFrame()
+        center_layout = QVBoxLayout(self.center_wrapper)
+        center_layout.setContentsMargins(10, 6, 10, 6)
+        center_layout.setSpacing(14)
+        self.center_wrapper.setMaximumWidth(980)   # <--- critical to keep readable column on wide monitors
+        self.center_wrapper.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
 
-        self.card_layout.addWidget(self.staff_card)
-        self.card_layout.addWidget(self.admin_card)
-        layout.addLayout(self.card_layout)
+        # cards row (we'll rely on spacing + center_wrapper max width for layout)
+        self.cards_row = QHBoxLayout()
+        self.cards_row.setContentsMargins(18, 8, 18, 8)
+        self.cards_row.setSpacing(36)
 
+        # create cards (images are loaded lazily)
+        self.staff_card, self.staff_image_label, self.staff_pixmap = self.create_card("Staff")
+        self.admin_card, self.admin_image_label, self.admin_pixmap = self.create_card("Admin")
+
+        # force same preferred dimensions for both cards (keeps symmetric)
+        card_pref_w = 420
+        card_pref_h = 360
+        for c in (self.staff_card, self.admin_card):
+            c.setMinimumWidth(320)
+            c.setMaximumWidth(card_pref_w)
+            c.setMinimumHeight(card_pref_h)
+            c.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+
+        # add stretch to center the pair inside the constrained center wrapper
+        self.cards_row.addStretch(1)
+        self.cards_row.addWidget(self.staff_card, alignment=Qt.AlignmentFlag.AlignCenter)
+        self.cards_row.addSpacing(12)
+        self.cards_row.addWidget(self.admin_card, alignment=Qt.AlignmentFlag.AlignCenter)
+        self.cards_row.addStretch(1)
+
+        center_layout.addLayout(self.cards_row)
+
+        # language selector (compact & centered)
         lang_label = QLabel("Choose Language")
         lang_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lang_label.setStyleSheet("color: #475569; font-size: 13px; padding-top: 10px")
-        layout.addWidget(lang_label)
+        lang_label.setStyleSheet("color: #475569; font-size: 13px; margin-top: 6px;")
+        center_layout.addWidget(lang_label)
 
         lang_row = QHBoxLayout()
+        lang_row.setContentsMargins(120, 0, 120, 0)
+        lang_row.setSpacing(24)
         self.radio_group = QButtonGroup()
-
         self.eng_radio = QRadioButton("English")
         self.mal_radio = QRadioButton("മലയാളം")
         self.eng_radio.setChecked(True)
-
-        for btn in [self.eng_radio, self.mal_radio]:
-            btn.setStyleSheet("""
-                font-size: 13px;
-                color: #1e293b;
-                padding: 6px 12px;
-            """)
+        for btn in (self.eng_radio, self.mal_radio):
+            btn.setStyleSheet("QRadioButton { font-size: 13px; color: #0f172a; }")
             self.radio_group.addButton(btn)
             lang_row.addWidget(btn)
 
-        lang_frame = QFrame()
-        lang_frame.setLayout(lang_row)
-        lang_frame.setStyleSheet("""
-            background-color: #e0e7ff;
-            padding: 5px;
-            border-radius: 12px;
-            border: 1px solid #c7d2fe;
-        """)
-        layout.addWidget(lang_frame)
+        lang_holder = QHBoxLayout()
+        lang_holder.addStretch()
+        lang_holder.addLayout(lang_row)
+        lang_holder.addStretch()
+        center_layout.addLayout(lang_holder)
 
-        powered = QLabel("Powered by E-WorkTrack AI Logging Engine")
+        powered = QLabel("Powered by Akshaya Kodannur CRM AI Logging Engine")
         powered.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        powered.setStyleSheet("color: #64748b; font-size: 12px; padding-top: 10px")
-        layout.addWidget(powered)
+        powered.setStyleSheet("color: #64748b; font-size: 12px; padding-top: 8px;")
+        center_layout.addWidget(powered)
 
-    def create_card(self, label, url):
-        vbox = QVBoxLayout()
+        root_layout.addStretch(1)
+        root_layout.addWidget(self.center_wrapper, alignment=Qt.AlignmentFlag.AlignCenter)
+        root_layout.addStretch(1)
+
+    def create_card(self, label):
         image_label = ClickableLabel(label, self.handle_card_click)
         image_label.setScaledContents(True)
-        image_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        image_label.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
 
         pixmap = QPixmap()
+        # try to fetch images (fail gracefully)
         try:
-            response = requests.get(url, timeout=6)
-            pixmap.loadFromData(response.content)
-            image_label.setPixmap(pixmap)
+            url_map = {
+                "Staff": "https://cdn-icons-png.flaticon.com/512/3135/3135715.png",
+                "Admin": "https://cdn-icons-png.flaticon.com/512/4034/4034609.png"
+            }
+            resp = requests.get(url_map.get(label, ""), timeout=4)
+            if resp.status_code == 200:
+                pixmap.loadFromData(resp.content)
+                image_label.setPixmap(pixmap)
         except Exception:
-            image_label.setText("Image Load Error")
+            # fallback: an emoji/text placeholder
+            image_label.setText("👤" if label == "Staff" else "🛂")
+            image_label.setFont(QFont("Inter", 48))
+            image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        label_widget = QLabel(label)
+        label_widget = QLabel(label.upper())
         label_widget.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        label_widget.setStyleSheet("color: #1e293b; font-weight: bold; font-size: 14px;")
+        label_widget.setStyleSheet("color: #0f172a; font-weight: 700; font-size: 14px; padding: 10px 8px;")
 
         wrapper = QFrame()
         wrapper.setStyleSheet("""
-            QFrame {
-                background-color: #ffffff;
-                border-radius: 12px;
-                padding: 10px;
-                border: 1px solid #e2e8f0;
-            }
+            QFrame { background-color: #ffffff; border-radius: 12px; padding: 18px; border: 1px solid #e6edf7; }
         """)
-        layout = QVBoxLayout()
-        layout.addWidget(image_label, alignment=Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(label_widget)
-        wrapper.setLayout(layout)
+        v = QVBoxLayout(wrapper)
+        v.setSpacing(12)
+        v.setContentsMargins(20, 10, 20, 14)
 
+        # fixed-size image frame so both cards align perfectly
+        img_frame = QFrame()
+        img_frame.setFixedSize(220, 220)
+        img_layout = QVBoxLayout(img_frame)
+        img_layout.setContentsMargins(0, 0, 0, 0)
+        img_layout.addStretch()
+        img_layout.addWidget(image_label, alignment=Qt.AlignmentFlag.AlignCenter)
+        img_layout.addStretch()
+
+        # ensure image_label uses target size
+        image_label.setFixedSize(180, 180)
+
+        v.addWidget(img_frame, alignment=Qt.AlignmentFlag.AlignCenter)
+        v.addWidget(label_widget)
         return wrapper, image_label, pixmap
 
     def handle_card_click(self, role):
@@ -157,18 +227,46 @@ class LoginUI(QWidget):
         self.stack.setCurrentWidget(self.landing_widget)
 
     def resizeEvent(self, event):
+        # override to implement responsive stacking and proper pixmap scaling
         super().resizeEvent(event)
-        # scale icons nicely
-        new_size = QSize(self.width() // 4, self.width() // 4)
-        for label, pixmap in [(self.staff_image_label, self.staff_pixmap), (self.admin_image_label, self.admin_pixmap)]:
-            if pixmap and not pixmap.isNull():
-                scaled = pixmap.scaled(
-                    new_size,
-                    Qt.AspectRatioMode.KeepAspectRatio,
-                    Qt.TransformationMode.SmoothTransformation
-                )
-                label.setPixmap(scaled)
-                label.setFixedSize(scaled.size())
+        try:
+            w = self.width()
+            # responsive threshold: narrow windows stack vertically
+            if w < 820:
+                # stack vertically by forcing both cards to the full constrained width
+                for c in (self.staff_card, self.admin_card):
+                    if c:
+                        c.setMaximumWidth(self.center_wrapper.maximumWidth() - 40)
+                        c.setMinimumWidth(360)
+                # adjust spacing (cards_row stays HBox but cards fill center so appear stacked)
+                self.cards_row.setSpacing(12)
+            else:
+                # wide mode: symmetric side-by-side cards
+                for c in (self.staff_card, self.admin_card):
+                    if c:
+                        c.setMaximumWidth(420)
+                self.cards_row.setSpacing(36)
+        except Exception:
+            pass
+
+        # scale pixmaps into their labels preserving aspect ratio
+        for label, pixmap in [
+            (getattr(self, "staff_image_label", None), getattr(self, "staff_pixmap", None)),
+            (getattr(self, "admin_image_label", None), getattr(self, "admin_pixmap", None))
+        ]:
+            if label is None:
+                continue
+            try:
+                if pixmap and not pixmap.isNull():
+                    target = label.size()
+                    scaled = pixmap.scaled(
+                        target,
+                        Qt.AspectRatioMode.KeepAspectRatio,
+                        Qt.TransformationMode.SmoothTransformation
+                    )
+                    label.setPixmap(scaled)
+            except Exception:
+                pass
 
 
 if __name__ == "__main__":

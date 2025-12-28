@@ -1,2 +1,27 @@
 # Secret credentials
 firebase_key.json
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+.venv/
+venv/
+ENV/
+
+# PyInstaller build artifacts
+build/
+dist/
+installer/
+*.spec
+
+# IDE settings
+.idea/
+.vscode/
+*.swp
+
+# Logs
+*.log
+data/logs/
